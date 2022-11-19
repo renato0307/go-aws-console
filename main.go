@@ -13,31 +13,32 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/renato0307/go-aws-console/browser"
 )
 
 const FederationURL = "https://signin.aws.amazon.com/federation"
 const ConsoleURL = "https://console.aws.amazon.com/"
 const Issuer = "IssuedGoAWSConsole"
 
-type SigninTokenCredentials struct {
+type signinTokenCredentials struct {
 	SessionID    string `json:"sessionId"`
 	SessionKey   string `json:"sessionKey"`
 	SessionToken string `json:"sessionToken"`
 }
 
-type SigninTokenResponse struct {
+type signinTokenRes struct {
 	SigninToken string `json:"SigninToken"`
 }
 
-func getSigninToken(creds credentials.Value) (*SigninTokenResponse, error) {
-	cred := SigninTokenCredentials{
+func getSigninToken(creds credentials.Value) (*signinTokenRes, error) {
+	cred := signinTokenCredentials{
 		SessionID:    creds.AccessKeyID,
 		SessionKey:   creds.SecretAccessKey,
 		SessionToken: creds.SessionToken,
 	}
 	credJSON, err := json.Marshal(cred)
 	if err != nil {
-		return new(SigninTokenResponse), err
+		return new(signinTokenRes), err
 	}
 
 	u, _ := url.Parse(FederationURL)
@@ -49,26 +50,26 @@ func getSigninToken(creds credentials.Value) (*SigninTokenResponse, error) {
 
 	resp, err := http.Get(u.String())
 	if err != nil {
-		return new(SigninTokenResponse), err
+		return new(signinTokenRes), err
 	}
 	defer resp.Body.Close()
 
 	byteBody, _ := ioutil.ReadAll(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		return new(SigninTokenResponse), errors.New(string(byteBody))
+		return new(signinTokenRes), errors.New(string(byteBody))
 	}
 
-	signinTokenResponse := new(SigninTokenResponse)
+	signinTokenResponse := new(signinTokenRes)
 	err = json.Unmarshal(byteBody, signinTokenResponse)
 	if err != nil {
-		return new(SigninTokenResponse), err
+		return new(signinTokenRes), err
 	}
 
 	return signinTokenResponse, nil
 }
 
-func buildLoginURL(r *SigninTokenResponse) (string, error) {
+func buildLoginURL(r *signinTokenRes) (string, error) {
 	u, _ := url.Parse(FederationURL)
 	q := u.Query()
 	q.Set("Action", "login")
@@ -80,7 +81,7 @@ func buildLoginURL(r *SigninTokenResponse) (string, error) {
 	return u.String(), nil
 }
 
-func CreateLoginURL(creds credentials.Value) (string, error) {
+func createLoginURL(creds credentials.Value) (string, error) {
 	signinTokenResponse, err := getSigninToken(creds)
 	if err != nil {
 		return "", err
@@ -99,10 +100,11 @@ func main() {
 	session := session.Must(session.NewSessionWithOptions(o))
 	creds, _ := session.Config.Credentials.Get()
 
-	loginUrl, err := CreateLoginURL(creds)
+	loginUrl, err := createLoginURL(creds)
 	if err != nil {
 		log.Fatalf("could not get login url: %s", err)
 	}
 
-	log.Printf("login url: %s\n", loginUrl)
+	browser.Open("https://signin.aws.amazon.com/oauth?Action=logout")
+	browser.Open(loginUrl)
 }
